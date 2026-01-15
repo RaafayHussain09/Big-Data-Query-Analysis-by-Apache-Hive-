@@ -1,0 +1,50 @@
+WITH attack_stats AS (
+    SELECT
+        proto,
+        service,
+        attack_cat,
+        COUNT(*) as total_attacks,
+        AVG(dur) as avg_duration,
+        SUM(sbytes + dbytes) as total_bytes,
+        ROUND(AVG(sttl), 2) as avg_src_ttl,
+        ROUND(AVG(dttl), 2) as avg_dst_ttl,
+        -- String manipulation to categorize protocols
+        CASE
+            WHEN LOWER(proto) LIKE '%tcp%' THEN 'TCP-based'
+            WHEN LOWER(proto) LIKE '%udp%' THEN 'UDP-based'
+            WHEN LOWER(proto) LIKE '%icmp%' THEN 'ICMP-based'
+            ELSE 'Other'
+        END as protocol_type
+    FROM unsw_nb15
+    WHERE label = 1  -- Attack records only
+    GROUP BY proto, service, attack_cat
+),
+ranked_attacks AS (
+    SELECT
+        *,
+        RANK() OVER (PARTITION BY protocol_type ORDER BY total_attacks DESC) as attack_rank,
+        ROUND((total_attacks * 100.0) / SUM(total_attacks)
+            OVER (PARTITION BY protocol_type), 2) as percentage_in_protocol,
+        -- Using math functions for normalized scores
+        ROUND((total_bytes / AVG(total_bytes) OVER ()) - 1, 3) as byte_deviation_score
+    FROM attack_stats
+)
+SELECT
+    protocol_type,
+    attack_cat,
+    service,
+    total_attacks,
+    avg_duration,
+    total_bytes,
+    attack_rank,
+    percentage_in_protocol,
+    byte_deviation_score,
+    -- Conditional formatting based on severity
+    CASE
+        WHEN total_attacks > 10000 THEN 'HIGH'
+        WHEN total_attacks BETWEEN 5000 AND 10000 THEN 'MEDIUM'
+        ELSE 'LOW'
+    END as severity_level
+FROM ranked_attacks
+WHERE attack_rank <= 5
+ORDER BY protocol_type, attack_rank;
