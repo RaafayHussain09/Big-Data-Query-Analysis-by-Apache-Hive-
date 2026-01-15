@@ -1,0 +1,38 @@
+-- 1. First, calculate the global time range separately
+WITH time_bounds AS (
+    SELECT
+        (MAX(UNIX_TIMESTAMP(Ltime)) - MIN(UNIX_TIMESTAMP(Stime))) as total_range_seconds
+    FROM unsw_nb15
+    WHERE label = 1
+)
+SELECT
+    HOUR(FROM_UNIXTIME(UNIX_TIMESTAMP(Stime, 'yyyy-MM-dd HH:mm:ss'))) as attack_hour,
+    attack_cat,
+    proto,
+    COUNT(*) as hourly_attacks,
+    SUM(CASE WHEN dur > 10 THEN 1 ELSE 0 END) as long_duration_attacks,
+    AVG(sbytes) as avg_src_bytes,
+    AVG(dbytes) as avg_dst_bytes,
+    STDDEV_POP(dur) as duration_std_dev,
+    PERCENTILE_APPROX(dur, 0.5) as median_duration,
+
+    -- Using window functions on aggregates (Note: some Hive versions require nesting for this)
+    CASE 
+        WHEN COUNT(*) > AVG(COUNT(*)) OVER () THEN 'Above Average'
+        ELSE 'Below Average'
+    END as attack_pattern,
+
+    -- 2. Use the joined value here. We use MAX() because it's a single constant value
+    ROUND(COUNT(*) * 3600.0 / MAX(tb.total_range_seconds), 2) as attacks_per_second
+
+FROM unsw_nb15
+CROSS JOIN time_bounds tb -- This makes the total_range_seconds available to every row
+WHERE label = 1
+    AND Stime IS NOT NULL
+    AND Ltime IS NOT NULL
+GROUP BY 
+    HOUR(FROM_UNIXTIME(UNIX_TIMESTAMP(Stime, 'yyyy-MM-dd HH:mm:ss'))),
+    attack_cat,
+    proto
+HAVING COUNT(*) > 100
+ORDER BY attack_hour, hourly_attacks DESC;
