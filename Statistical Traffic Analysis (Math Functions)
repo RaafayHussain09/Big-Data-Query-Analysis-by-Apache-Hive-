@@ -1,0 +1,64 @@
+-- 1. Preview the data
+SELECT * FROM unsw_nb15 
+LIMIT 10;
+
+-- 2. Count total records and compare attack vs normal traffic
+SELECT 
+    'Total Records' as metric,
+    COUNT(*) as value
+FROM unsw_nb15
+UNION ALL
+SELECT 
+    'Attack Records',
+    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END)
+FROM unsw_nb15
+UNION ALL
+SELECT
+    'Normal Records',
+    SUM(CASE WHEN label = 0 THEN 1 ELSE 0 END)
+FROM unsw_nb15;
+
+-- 3. Count distinct attack categories
+SELECT 
+    attack_cat,
+    COUNT(*) as attack_count
+FROM unsw_nb15
+WHERE label = 1 
+    AND attack_cat IS NOT NULL
+GROUP BY attack_cat
+ORDER BY attack_count DESC;
+
+-- 4. Top 10 most common protocols in attacks
+SELECT 
+    proto,
+    COUNT(*) as attack_count,
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM unsw_nb15 WHERE label = 1), 2) as percentage
+FROM unsw_nb15
+WHERE label = 1
+GROUP BY proto
+ORDER BY attack_count DESC
+LIMIT 10;
+
+-- 5. Attack distribution by service
+SELECT 
+    service,
+    COUNT(*) as total_connections,
+    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END) as attack_count,
+    ROUND(SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) as attack_percentage
+FROM unsw_nb15
+WHERE service IS NOT NULL 
+    AND service != '-'
+GROUP BY service
+HAVING total_connections > 100
+ORDER BY attack_percentage DESC
+LIMIT 15;
+
+-- 6. Most targeted destination ports
+SELECT 
+    dsport,
+    COUNT(*) as total_connections,
+    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END) as attack_count
+FROM unsw_nb15
+GROUP BY dsport
+ORDER BY attack_count DESC
+LIMIT 10;
