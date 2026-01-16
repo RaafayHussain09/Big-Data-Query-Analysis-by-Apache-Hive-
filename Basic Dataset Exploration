@@ -1,0 +1,28 @@
+SELECT * FROM unsw_nb15 
+LIMIT 10;
+
+-- Query 2: Count total records and attack vs normal traffic
+SELECT 
+    'Total Records' as metric,
+    COUNT(*) as value
+FROM unsw_nb15
+UNION ALL
+SELECT 
+    'Attack Records',
+    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END)
+FROM unsw_nb15
+UNION ALL
+SELECT
+    'Normal Records',
+    SUM(CASE WHEN label = 0 THEN 1 ELSE 0 END)
+FROM unsw_nb15;
+
+-- Query 3: Count distinct attack categories
+SELECT 
+    attack_cat,
+    COUNT(*) as attack_count
+FROM unsw_nb15
+WHERE label = 1
+    AND attack_cat IS NOT NULL
+GROUP BY attack_cat
+ORDER BY attack_count DESC;
